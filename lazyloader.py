@@ -63,10 +63,7 @@ def doMagic():
         print("Downloading: {0} Bytes: {1}".format(url, file_size))
 
         file_size_dl = 0
-        if file_size > 90000000:
-            block_sz = 4194304 #4MB
-        else:
-            block_sz = 524288 #0.5MB
+        block_sz = 524288 #0.5 MB; larger chunks crap out easily
         while file_size_dl < file_size:
             buffer = u.read(block_sz)
             if not buffer:
