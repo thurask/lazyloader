@@ -60,7 +60,7 @@ def doMagic():
         u = urllib.request.urlopen(url)
         f = open(file_name, 'wb')
         file_size = int(u.getheader("Content-Length"))
-        print("Downloading: {0} Bytes: {1}".format(url, file_size))
+        print("\nDownloading: {0}\nBytes: {1}".format(url, file_size))
 
         file_size_dl = 0
         block_sz = 524288 #0.5 MB; larger chunks crap out easily
@@ -72,7 +72,7 @@ def doMagic():
             file_size_dl += len(buffer)
             f.write(buffer)
             p = float(file_size_dl) / file_size
-            status = r"{0}  [{1:.2%}]".format(file_size_dl, p)
+            status = r"{0 MB}  [{1:.2%}]".format((file_size_dl/1048576), p)
             status = status + chr(8)*(len(status)+1)
             print(status)
             
