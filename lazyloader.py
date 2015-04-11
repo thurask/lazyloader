@@ -3,86 +3,175 @@ import glob
 import shutil
 import platform
 import hashlib
-import urllib.request
+import requests
+import time
+import queue
+import threading
+import binascii
+import math
+import sys
+import argparse
+import subprocess
 
-def doMagic():
-    localdir = os.getcwd()
-    osversion = input("OS VERSION: ")
-    radioversion = input("RADIO VERSION: ")
-    softwareversion = input("SOFTWARE RELEASE: ")
-    device = int(input("SELECTED DEVICE (0=STL100-1; 1=STL100-2/3/P9983; 2=STL100-4; 3=Q10/Q5/P9983; 4=Z30/CLASSIC/LEAP; 5=Z3; 6=PASSPORT): "))
+#http://pipe-devnull.com/2012/09/13/queued-threaded-http-downloader-in-python.html
+#Modified to work with Python 3:
+#Downloader class - reads queue and downloads each file in succession
+class Downloader(threading.Thread):
+    def __init__(self, queue, output_directory):
+        threading.Thread.__init__(self,name= binascii.hexlify(os.urandom(8)))
+        self.queue = queue
+        self.output_directory = output_directory
+    def run(self):
+        while True:
+            # gets the url from the queue
+            url = self.queue.get()
+            # download the file
+            self.download(url)
+            # send a signal to the queue that the job is done
+            self.queue.task_done()
+    def download(self, url):
+        t_start = time.clock()
+        local_filename = url.split('/')[-1]
+        print("Downloading:", local_filename)
+        r = requests.get(url, stream=True)
+        if (r.status_code != 404): #200 OK
+            fname = self.output_directory + "/" + os.path.basename(url)
+            with open(fname, "wb") as f:
+                for chunk in r.iter_content(chunk_size=1024): 
+                    if chunk: # filter out keep-alive new chunks
+                        f.write(chunk)
+                        f.flush()
+            t_elapsed = time.clock() - t_start
+            t_elapsed_proper = math.ceil(t_elapsed*100)/100
+            print("Downloaded " + url + " in " + str(t_elapsed_proper) + " seconds")
+            f.close()
+        else:
+            print("* Thread: " + self.name + " Bad URL: " + url)
+            return
+
+# Spawns dowloader threads and manages URL downloads queue
+class DownloadManager():
+    def __init__(self, download_dict, output_directory, thread_count=5):
+        self.thread_count = thread_count
+        self.download_dict = download_dict
+        self.output_directory = output_directory
+    # Start the downloader threads, fill the queue with the URLs and
+    # then feed the threads URLs via the queue
+    def begin_downloads(self):
+        dlqueue = queue.Queue()
+        # Create i thread pool and give them a queue
+        for t in range(self.thread_count):
+            t = Downloader(dlqueue, self.output_directory)
+            t.setDaemon(True)
+            t.start()
+        # Load the queue from the download dict
+        for linkname in self.download_dict:
+            # print uri
+            dlqueue.put(self.download_dict[linkname])
+
+        # Wait for the queue to finish
+        dlqueue.join()
+        return
+
+# Handle bools
+def str2bool(v):
+    return str(v).lower() in ("yes", "true", "t", "1", "y")
+
+# Get 64 or 32 bit
+def is64Bit():
+    amd64 = platform.machine().endswith("64")
+    return amd64
+
+# Set 7z executable based on bit type
+def getSevenZip():
+    if is64Bit() == True:
+        return "7za64.exe"
+    else:
+        return "7za.exe"
     
+# Get corecount, with fallback 
+def getCoreCount():
+    cores = str(os.cpu_count())  # thank you Python 3.4
+    if os.cpu_count() == None:
+        cores = str(1)
+    return cores
+
+# Extract bars with 7z
+def extractBar(filepath):
+    print("EXTRACTING...")
+    for file in os.listdir(filepath):
+        if file.endswith(".bar"):
+            try:
+                print("\nEXTRACTING: " + file + "\n")
+                os.system(getSevenZip() + " x " + '"' + file + '" *.signed -aos')
+            except Exception:
+                print("EXTRACTION FAILURE")
+                print("DID IT DOWNLOAD PROPERLY?")
+                return
+            
+# Check if URL has HTTP 200 or HTTP 300-308 status code			 
+def availability(url):
+    try:
+        av = requests.head(str(url))
+    except requests.ConnectionError:
+        return False
+    else:
+        status = int(av.status_code)
+        if (status == 200) or (300 < status <= 308):
+            return True
+        else:
+            return False
+
+def doMagic(osversion, radioversion, softwareversion, device, localdir):
     # hash SW release
     sha1 = hashlib.sha1(softwareversion.encode('utf-8'))
     hashedsoftwareversion = sha1.hexdigest()
     
+    baseurl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion
+    
     if device == 0:
-        osurl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/winchester.factory_sfi.desktop-" + osversion + "-nto+armle-v7+signed.bar"
-        radiourl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/m5730-" + radioversion + "-nto+armle-v7+signed.bar"
+        osurl = baseurl + "/winchester.factory_sfi.desktop-" + osversion + "-nto+armle-v7+signed.bar"
+        radiourl = baseurl + "/m5730-" + radioversion + "-nto+armle-v7+signed.bar"
     elif device == 1:
-        osurl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8960.factory_sfi.desktop-" + osversion + "-nto+armle-v7+signed.bar"
-        radiourl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8960-" + radioversion + "-nto+armle-v7+signed.bar"
+        osurl = baseurl + "/qc8960.factory_sfi.desktop-" + osversion + "-nto+armle-v7+signed.bar"
+        radiourl = baseurl + "/qc8960-" + radioversion + "-nto+armle-v7+signed.bar"
     elif device == 2:
-        osurl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8960.factory_sfi.desktop-" + osversion + "-nto+armle-v7+signed.bar"
-        radiourl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8960.omadm-" + radioversion + "-nto+armle-v7+signed.bar"
+        osurl = baseurl + "/qc8960.factory_sfi.desktop-" + osversion + "-nto+armle-v7+signed.bar"
+        radiourl = baseurl + "/qc8960.omadm-" + radioversion + "-nto+armle-v7+signed.bar"
     elif device == 3:
-        osurl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8960.factory_sfi.desktop-" + osversion + "-nto+armle-v7+signed.bar"
-        radiourl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8960.wtr-" + radioversion + "-nto+armle-v7+signed.bar"
+        osurl = baseurl + "/qc8960.factory_sfi.desktop-" + osversion + "-nto+armle-v7+signed.bar"
+        radiourl = baseurl + "/qc8960.wtr-" + radioversion + "-nto+armle-v7+signed.bar"
     elif device == 4:
-        osurl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8960.factory_sfi.desktop-" + osversion + "-nto+armle-v7+signed.bar"
-        radiourl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8960.wtr5-" + radioversion + "-nto+armle-v7+signed.bar"
+        osurl = baseurl + "/qc8960.factory_sfi.desktop-" + osversion + "-nto+armle-v7+signed.bar"
+        radiourl = baseurl + "/qc8960.wtr5-" + radioversion + "-nto+armle-v7+signed.bar"
     elif device == 5:
-        osurl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8960.factory_sfi_hybrid_qc8x30.desktop-" + osversion + "-nto+armle-v7+signed.bar"
-        radiourl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8930.wtr5-" + radioversion + "-nto+armle-v7+signed.bar"
+        osurl = baseurl + "/qc8960.factory_sfi_hybrid_qc8x30.desktop-" + osversion + "-nto+armle-v7+signed.bar"
+        radiourl = baseurl + "/qc8930.wtr5-" + radioversion + "-nto+armle-v7+signed.bar"
     elif device == 6:
-        osurl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8960.factory_sfi_hybrid_qc8974.desktop-" + osversion + "-nto+armle-v7+signed.bar"
-        radiourl = "http://cdn.fs.sl.blackberry.com/fs/qnx/production/" + hashedsoftwareversion + "/qc8974.wtr2-" + radioversion + "-nto+armle-v7+signed.bar"
+        osurl = baseurl + "/qc8960.factory_sfi_hybrid_qc8974.desktop-" + osversion + "-nto+armle-v7+signed.bar"
+        radiourl = baseurl + "/qc8974.wtr2-" + radioversion + "-nto+armle-v7+signed.bar"
     else:
         return("PICK A REAL DEVICE!")
-    
-    # Get OS type, set 7z
-    amd64 = platform.machine().endswith("64")
-    if amd64 == True:
-        sevenzip = "7za64.exe"
+       
+    # Check availability of software release
+    av = availability(baseurl)
+    if(av == True):
+        print("\nSOFTWARE RELEASE", softwareversion, "EXISTS\n")
     else:
-        sevenzip = "7za.exe"
+        print("\nSOFTWARE RELEASE", softwareversion, "NOT FOUND\n")
+        cont = str2bool(input("CONTINUE? Y/N "))
+        if (cont == True):
+            pass
+        else:
+            print("\nExiting...")
+            raise SystemExit  # bye bye
 
-    # Extract bars with 7z
-    def extract():
-        print("EXTRACTING...")
-        for file in os.listdir(localdir):
-            if file.endswith(".bar"):
-                print("\nEXTRACTING: " + file + "\n")
-                os.system(sevenzip + " x " + '"' + file + '" *.signed -aos')
-
-    def download(url):
-        file_name = url.split('/')[-1]
-        u = urllib.request.urlopen(url)
-        f = open(file_name, 'wb')
-        file_size = int(u.getheader("Content-Length"))
-        print("\nDownloading: {0}\nBytes: {1}".format(url, file_size))
-
-        file_size_dl = 0
-        block_sz = 524288 #0.5 MB; larger chunks crap out easily
-        while file_size_dl < file_size:
-            buffer = u.read(block_sz)
-            if not buffer:
-                break
-        
-            file_size_dl += len(buffer)
-            f.write(buffer)
-            p = float(file_size_dl) / file_size
-            status = r"{0} MB  [{1:.2%}]".format((file_size_dl/1048576), p)
-            status = status + chr(8)*(len(status)+1)
-            print(status)
-            
-        f.close()
-
-    download(osurl)
-    print("\n")
-    download(radiourl)
+    print("DOWNLOADING...\n")
+    dldict = dict(osurl=osurl, radiourl=radiourl)
+    download_manager = DownloadManager(dldict, localdir, 3)
+    download_manager.begin_downloads()
     
-    extract()
+    extractBar(localdir)
 
     # Make dirs
     if not os.path.exists(os.path.join(localdir, 'bars')):
@@ -104,14 +193,10 @@ def doMagic():
     
     if device == 0:
         try:
-            os_ti = str(glob.glob("qcfm.image.com.qnx.coreos.qcfm.os.factory_sfi.desktop.*.signed")[0])
+            os_ti = str(glob.glob("*winchester*.signed")[0])
         except IndexError:
-            print("No OMAP image found, trying 10.3.1 name\n")
-            try:
-                os_ti = str(glob.glob("*winchester*.signed")[0])
-            except IndexError:
-                print("No OMAP image found\n")
-                return
+            print("No OMAP image found\n")
+            return
         try:
             radio_z10_ti = str(glob.glob("*radio.m5730*.signed")[0])
         except IndexError:
@@ -255,35 +340,49 @@ def doMagic():
 
     print("\nCREATION FINISHED!\n")
     
-    autoloader = input("RUN AUTOLOADER (Y/N)?: ")
-    if autoloader == "y" or autoloader == "Y" or autoloader == "yes":
+    autoloader = str2bool(input("RUN AUTOLOADER (Y/N)?: "))
+    if autoloader == True:
         os.chdir(loaderdir_os)
         if device == 0:
             loaderfile = str(glob.glob("Z10*STL100-1*")[0])
-            os.system(loaderfile)
         elif device == 1:
             loaderfile = str(glob.glob("Z10*STL100-2-3*")[0])
-            os.system(loaderfile)
         elif device == 2:
             loaderfile = str(glob.glob("Z10*STL100-4*")[0])
-            os.system(loaderfile)
         elif device == 3:
             loaderfile = str(glob.glob("Q10*")[0])
-            os.system(loaderfile)
         elif device == 4:
             loaderfile = str(glob.glob("Z30*")[0])
-            os.system(loaderfile)
         elif device == 5:
             loaderfile = str(glob.glob("Z3*")[0])
-            os.system(loaderfile)
         elif device == 6:
             loaderfile = str(glob.glob("Passport*")[0])
-            os.system(loaderfile)
         else:
             return("UH OH, NO AUTOLOADERS?")
+        if len(loaderfile) > 0:
+            p = subprocess.Popen(loaderfile).wait()
+            print("\nFINISHED!!!\n")
+            return
+        else:
+            print("Error!")
+            return
     else:
-        pass
+        print("\nFINISHED!!!")
 
 if __name__ == '__main__':
-    doMagic()
-    smeg = input("Press Enter to exit")
+    if len(sys.argv) > 1:
+        parser = argparse.ArgumentParser(description="Create one autoloader for personal use.", usage="%(prog)s OSVERSION RADIOVERSION SWVERSION DEVICE", epilog = "http://github.com/thurask/lazyloader")
+        parser.add_argument("os", help="OS version, 10.x.y.zzzz")
+        parser.add_argument("radio", help="Radio version, 10.x.y.zzzz")
+        parser.add_argument("swrelease", help="Software version, 10.x.y.zzzz")
+        parser.add_argument("device", type=int, help="0=STL100-1\n1=STL100-2/3/P9983\n2=STL100-4\n3=Q10/Q5/P9983\n4=Z30/CLASSIC/LEAP\n5=Z3\n6=PASSPORT")
+        args = parser.parse_args(sys.argv[1:])
+        doMagic(args.os, args.radio, args.swrelease, args.device, os.getcwd())
+    else:
+        localdir = os.getcwd()
+        osversion = input("OS VERSION: ")
+        radioversion = input("RADIO VERSION: ")
+        softwareversion = input("SOFTWARE RELEASE: ")
+        device = int(input("SELECTED DEVICE (0=STL100-1; 1=STL100-2/3/P9983; 2=STL100-4; 3=Q10/Q5/P9983; 4=Z30/CLASSIC/LEAP; 5=Z3; 6=PASSPORT): "))
+        print(" ")
+        doMagic(osversion, radioversion, softwareversion, device, localdir)

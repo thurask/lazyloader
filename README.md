@@ -17,3 +17,28 @@ Those listed in Operation, plus (preferably) conversion to executable formats vi
 3. Extract bars
 4. Create autoloader
 5. Ask to load autoloader
+
+## Command Line Arguments
+### Help
+
+	> lazyloader -h
+	
+	usage: lazyloader.exe OSVERSION RADIOVERSION SWVERSION DEVICE
+	
+	Create one autoloader for personal use.
+	
+	positional arguments:
+		os          OS version, 10.x.y.zzzz
+		radio       Radio version, 10.x.y.zzzz
+		swrelease   Software version, 10.x.y.zzzz
+		device      0=STL100-1 1=STL100-2/3/P9983 2=STL100-4 3=Q10/Q5/P9983
+	              4=Z30/CLASSIC/LEAP 5=Z3 6=PASSPORT
+	
+	optional arguments:
+		-h, --help  show this help message and exit
+	
+### Example
+
+		> lazyloader 10.3.1.2726 10.3.1.2727 10.3.1.1877 6
+	would make an autoloader for OS 10.3.1.2726/radio 10.3.1.2727 (software release 10.3.1.1877) for Passport (device 6).
+	
