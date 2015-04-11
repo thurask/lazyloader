@@ -72,7 +72,7 @@ def doMagic():
             file_size_dl += len(buffer)
             f.write(buffer)
             p = float(file_size_dl) / file_size
-            status = r"{0 MB}  [{1:.2%}]".format((file_size_dl/1048576), p)
+            status = r"{0} MB  [{1:.2%}]".format((file_size_dl/1048576), p)
             status = status + chr(8)*(len(status)+1)
             print(status)
             
