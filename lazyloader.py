@@ -215,6 +215,7 @@ def doMagic(osversion, radioversion, softwareversion, device, localdir, autoload
 	download_manager = DownloadManager(dldict, localdir, 3)
 	download_manager.begin_downloads()
 	
+	print("\nEXTRACTING...")
 	extractBar(localdir)
 
 	# Make dirs
@@ -252,6 +253,7 @@ def doMagic(osversion, radioversion, softwareversion, device, localdir, autoload
 				except shutil.Error:
 					os.remove(bardest_radio)
 	
+	print("\nCREATING LOADER...")
 	if device == 0:
 		try:
 			os_ti = str(glob.glob("*winchester*.signed")[0])
@@ -442,6 +444,6 @@ if __name__ == '__main__':
 		radioversion = input("RADIO VERSION: ")
 		softwareversion = input("SOFTWARE RELEASE: ")
 		device = int(input("SELECTED DEVICE (0=STL100-1; 1=STL100-2/3/P9983; 2=STL100-4; 3=Q10/Q5/P9983; \n4=Z30/CLASSIC/LEAP; 5=Z3; 6=PASSPORT): "))
-		autoloader = str2bool(input("RUN AUTOLOADER (Y/N)?: "))
+		autoloader = str2bool(input("RUN AUTOLOADER (WILL WIPE YOUR DEVICE!)(Y/N)?: "))
 		print(" ")
 		doMagic(osversion, radioversion, softwareversion, device, localdir, autoloader)
