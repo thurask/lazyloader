@@ -36,6 +36,7 @@ Those listed in Operation, plus (preferably) conversion to executable formats vi
 	
 	optional arguments:
 		-h, --help  show this help message and exit
+		--run-loader  Run autoloader after creation
 	
 ### Example
 
