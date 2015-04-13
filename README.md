@@ -43,3 +43,10 @@ Those listed in Operation, plus (preferably) conversion to executable formats vi
 		> lazyloader 10.3.1.2726 10.3.1.2727 10.3.1.1877 6
 	would make an autoloader for OS 10.3.1.2726/radio 10.3.1.2727 (software release 10.3.1.1877) for Passport (device 6).
 	
+## License
+No fancy licensing here, just fork this and do whatever.
+Although, if you figure out something interesting, please do try to put it upstream via pull request.
+
+## Authors
+* Thurask [(@thuraski)](http://www.twitter.com/thuraski)
+* Viewers Like You
