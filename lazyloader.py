@@ -15,6 +15,203 @@ import argparse
 import webbrowser
 import subprocess
 
+def ghettoConvert(intsize):
+	hexsize = format(intsize, '08x')  # '00AABBCC'
+	newlist = [hexsize[i:i + 2] for i in range(0, len(hexsize), 2)]  # ['00', 'AA','BB','CC']
+	while "00" in newlist:
+		newlist.remove("00")  # extra padding
+	newlist.reverse()
+	ghettoHex = "".join(newlist)  # 'CCBBAA'
+	ghettoHex = ghettoHex.rjust(16, '0')
+	return binascii.unhexlify(bytes(ghettoHex.upper(), 'ascii'))
+
+def makeOffset(cap, firstfile, secondfile="", thirdfile="", fourthfile="", fifthfile="", sixthfile="", folder=os.getcwd()):
+	filecount = 0
+	filelist = [firstfile, secondfile, thirdfile, fourthfile, fifthfile, sixthfile]
+	for i in filelist:
+		if i:
+			filecount += 1
+	# immutable things
+	separator = binascii.unhexlify("6ADF5D144E4B4D4E474F46464D4E532B170A0D1E0C14532B372A2D3E2C34522F3C534F514F514F514F534E464D514E4947514E51474F70709CD5C5979CD5C5979CD5C597") #3.11.0.18
+	password = binascii.unhexlify("0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+	singlepad = binascii.unhexlify("00")
+	doublepad = binascii.unhexlify("0000")
+	signedpad = binascii.unhexlify("0000000000000000")
+	filepad = binascii.unhexlify(bytes(str(filecount).rjust(2, '0'), 'ascii'))  # between 01 and 06
+	trailermax = int(7 - int(filecount))
+	trailermax = trailermax * 2
+	trailer = "0" * trailermax  # 00 repeated between 1 and 6 times
+	trailers = binascii.unhexlify(trailer)
+		
+	capfile = str(glob.glob(cap)[0])
+	capsize = os.path.getsize(capfile)  # size of cap.exe, in bytes
+	
+	first = str(glob.glob(firstfile)[0])
+	firstsize = os.path.getsize(first)  # required
+	if (filecount >= 2):
+		second = str(glob.glob(secondfile)[0])
+		secondsize = os.path.getsize(second)
+	if (filecount >= 3):
+		third = str(glob.glob(thirdfile)[0])
+		thirdsize = os.path.getsize(third)
+	if (filecount >= 4):
+		fourth = str(glob.glob(fourthfile)[0])
+		fourthsize = os.path.getsize(fourth)
+	if (filecount >= 5):
+		fifth = str(glob.glob(fifthfile)[0])
+		fifthsize = os.path.getsize(fifth)
+		
+	
+	firstoffset = len(separator) + len(password) + 64 + capsize  # start of first file; length of cap + length of offset
+	firststart = ghettoConvert(firstoffset)
+	if (filecount >= 2):
+		secondoffset = firstoffset + firstsize  # start of second file
+		secondstart = ghettoConvert(secondoffset)
+	if (filecount >= 3):
+		thirdoffset = secondstart + secondsize  # start of third file
+		thirdstart = ghettoConvert(thirdoffset)
+	if (filecount >= 4):
+		fourthoffset = thirdoffset + thirdsize  # start of fourth file
+		fourthstart = ghettoConvert(fourthoffset)
+	if (filecount >= 5):
+		fifthoffset = fourthstart + fourthsize  # start of fifth file
+		fifthstart = ghettoConvert(fifthoffset)
+	if (filecount == 6):
+		sixthoffset = fifthoffset + fifthsize  # start of sixth file
+		sixthstart = ghettoConvert(sixthoffset)
+		
+	with open(os.path.join(folder, "offset.hex"), "w+b") as file:
+		file.write(separator)
+		file.write(password)
+		file.write(filepad)
+		file.write(doublepad)
+		file.write(firststart)
+		file.write(singlepad)
+		if (filecount >= 2):
+			file.write(secondstart)
+		else:
+			file.write(signedpad)
+		file.write(singlepad)
+		if (filecount >= 3):
+			file.write(thirdstart)
+		else:
+			file.write(signedpad)
+		file.write(singlepad)
+		if (filecount >= 4):
+			file.write(fourthstart)
+		else:
+			file.write(signedpad)
+		file.write(singlepad)
+		if (filecount >= 5):
+			file.write(fifthstart)
+		else:
+			file.write(signedpad)
+		file.write(singlepad)
+		if (filecount == 6):
+			file.write(sixthstart)
+		else:
+			file.write(signedpad)
+		file.write(singlepad)
+		file.write(doublepad)
+		file.write(trailers)
+		
+def makeAutoloader(filename, cap, firstfile, secondfile="", thirdfile="", fourthfile="", fifthfile="", sixthfile="", folder=os.getcwd()):
+	makeOffset(cap, firstfile, secondfile, thirdfile, fourthfile, fifthfile, sixthfile, folder)
+	
+	filecount = 0
+	filelist = [firstfile, secondfile, thirdfile, fourthfile, fifthfile, sixthfile]
+	for i in filelist:
+		if i:
+			filecount += 1
+	try:
+		with open(os.path.join(os.path.abspath(folder), filename), "wb") as autoloader:
+			try:
+				with open(os.path.normpath(cap), "rb") as capfile:
+					print("WRITING CAP.EXE...")
+					while True:
+						chunk = capfile.read(4096)  # 4k chunks
+						if not chunk:
+							break
+						autoloader.write(chunk)
+			except IOError as e:
+				print("Operation failed:", e.strerror)
+			try:
+				with open(os.path.join(folder, "offset.hex"), "rb") as offset:
+					print("WRITING MAGIC OFFSET...")
+					autoloader.write(offset.read())
+			except IOError as e:
+				print("Operation failed:", e.strerror)
+			try:
+				with open(firstfile, "rb") as first:
+					print("WRITING SIGNED FILE #1...\n", firstfile)
+					while True:
+						chunk = first.read(4096)  # 4k chunks
+						if not chunk:
+							break
+						autoloader.write(chunk)
+			except IOError as e:
+				print("Operation failed:", e.strerror)
+			if (filecount >= 2):
+				try:
+					print("WRITING SIGNED FILE #2...\n", secondfile)
+					with open(secondfile, "rb") as second:
+						while True:
+							chunk = second.read(4096)  # 4k chunks
+							if not chunk:
+								break
+							autoloader.write(chunk)
+				except IOError as e:
+					print("Operation failed:", e.strerror)
+			if (filecount >= 3):
+				try:
+					print("WRITING SIGNED FILE #3...\n", thirdfile)
+					with open(thirdfile, "rb") as third:
+						while True:
+							chunk = third.read(4096)  # 4k chunks
+							if not chunk:
+								break
+							autoloader.write(chunk)
+				except IOError as e:
+					print("Operation failed:", e.strerror)
+			if (filecount >= 4):
+				try:
+					print("WRITING SIGNED FILE #5...\n", fourthfile)
+					with open(fourthfile, "rb") as fourth:
+						while True:
+							chunk = fourth.read(4096)  # 4k chunks
+							if not chunk:
+								break
+							autoloader.write(chunk)
+				except IOError as e:
+					print("Operation failed:", e.strerror)
+			if (filecount >= 5):
+				try:
+					print("WRITING SIGNED FILE #5...\n", fifthfile)
+					with open(fifthfile, "rb") as fifth:
+						while True:
+							chunk = fifth.read(4096)  # 4k chunks
+							if not chunk:
+								break
+							autoloader.write(chunk)
+				except IOError as e:
+					print("Operation failed:", e.strerror)
+			if (filecount == 6):
+				try:
+					print("WRITING SIGNED FILE #6...\n", sixthfile)
+					with open(sixthfile, "rb") as sixth:
+						while True:
+							chunk = sixth.read(4096)  # 4k chunks
+							if not chunk:
+								break
+							autoloader.write(chunk)
+				except IOError as e:
+					print("Operation failed:", e.strerror)
+	except IOError as e:
+		print("Operation failed:", e.strerror)
+		
+	print(filename, "FINISHED!\n")
+	os.remove(os.path.join(folder, "offset.hex"))
+
 def deviceRange(argument):
 	device = int(argument)
 	if device < 0 or device > 6:
@@ -252,6 +449,8 @@ def doMagic(osversion, radioversion, softwareversion, device, localdir, autoload
 					shutil.move(files, bardir_radio)
 				except shutil.Error:
 					os.remove(bardest_radio)
+					
+	cap="cap.exe"
 	
 	print("\nCREATING LOADER...")
 	if device == 0:
@@ -268,7 +467,7 @@ def doMagic(osversion, radioversion, softwareversion, device, localdir, autoload
 		else:
 			print("Creating OMAP Z10 OS...")
 			try:
-				subprocess.call("cap.exe create " + os_ti + " " + radio_z10_ti + " Z10_" + osversion + "_STL100-1.exe", shell=True)
+				makeAutoloader(filename="Z10_" + osversion + "_STL100-1.exe", cap=cap, firstfile=os_ti, secondfile=radio_z10_ti, thirdfile="", fourthfile="", fifthfile="", sixthfile="", folder=localdir)
 			except Exception:
 				print("Could not create STL100-1 OS/radio loader")
 				return
@@ -286,7 +485,7 @@ def doMagic(osversion, radioversion, softwareversion, device, localdir, autoload
 		else:
 			print("Creating Qualcomm Z10 OS...")
 			try:
-				subprocess.call("cap.exe create " + os_8960 + " " + radio_z10_qcm + " Z10_" + osversion + "_STL100-2-3.exe", shell=True)
+				makeAutoloader("Z10_" + osversion + "_STL100-2-3.exe", cap, os_8960, radio_z10_qcm, folder=localdir)
 			except Exception:
 				print("Could not create Qualcomm Z10 OS/radio loader")
 				return
@@ -304,7 +503,7 @@ def doMagic(osversion, radioversion, softwareversion, device, localdir, autoload
 		else:
 			print("Creating Verizon Z10 OS...")
 			try:
-				subprocess.call("cap.exe create " + os_8960 + " " + radio_z10_vzw + " Z10_" + osversion + "_STL100-4.exe", shell=True)
+				makeAutoloader("Z10_" + osversion + "_STL100-4.exe", cap, os_8960, radio_z10_vzw, folder=localdir)
 			except Exception:
 				print("Could not create Verizon Z10 OS/radio loader")
 				return
@@ -322,7 +521,7 @@ def doMagic(osversion, radioversion, softwareversion, device, localdir, autoload
 		else:
 			print("Creating Q10/Q5 OS...")
 			try:
-				subprocess.call("cap.exe create " + os_8960 + " " + radio_q10 + " Q10_" + osversion + "_SQN100-1-2-3-4-5.exe", shell=True)
+				makeAutoloader("Q10_" + osversion + "_SQN100-1-2-3-4-5.exe", cap, os_8960, radio_q10, folder=localdir)
 			except Exception:
 				print("Could not create Q10/Q5 OS/radio loader")
 				return
@@ -340,7 +539,7 @@ def doMagic(osversion, radioversion, softwareversion, device, localdir, autoload
 		else:
 			print("Creating Z30/Classic OS...")
 			try:
-				subprocess.call("cap.exe create " + os_8960 + " " + radio_z30 + " Z30_" + osversion + "_STA100-1-2-3-4-5-6.exe", shell=True)
+				makeAutoloader("Z30_" + osversion + "_STA100-1-2-3-4-5-6.exe", cap, os_8960, radio_z30, folder=localdir)
 			except Exception:
 				print("Could not create Z30/Classic OS/radio loader")
 				return
@@ -358,7 +557,7 @@ def doMagic(osversion, radioversion, softwareversion, device, localdir, autoload
 		else:
 			print("Creating Z3 OS...")
 			try:
-				subprocess.call("cap.exe create " + os_8x30 + " " + radio_z3 + " Z3_" + osversion + "_STJ100-1-2.exe", shell=True)
+				makeAutoloader("Z3_" + osversion + "_STJ100-1-2.exe", cap, os_8x30, radio_z3, folder=localdir)
 			except Exception:
 				print("Could not create Z3 OS/radio loader")
 				return
@@ -376,7 +575,7 @@ def doMagic(osversion, radioversion, softwareversion, device, localdir, autoload
 		else:
 			print("Creating Passport OS...")
 			try:
-				subprocess.call("cap.exe create " + os_8974 + " " + radio_8974 + " Passport_" + osversion + "_SQW100-1-2-3.exe", shell=True)
+				makeAutoloader("Passport_" + osversion + "_SQW100-1-2-3.exe", cap, os_8974, radio_8974, folder=localdir)
 			except Exception:
 				print("Could not create Passport OS/radio loader")
 				return

@@ -11,7 +11,7 @@ executables = [
 ]
 
 setup(name='lazyloader',
-      version = '1.0',
+      version = '2015-04-13-A',
       description = 'Automatically creates your own personal autoloader',
       options = dict(build_exe = buildOptions),
       executables = executables)
