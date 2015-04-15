@@ -14,6 +14,10 @@ import sys
 import argparse
 import webbrowser
 import subprocess
+import zipfile
+
+_version = "2015-04-14-A"
+_release = "https://github.com/thurask/archivist/releases/latest"
 
 def ghettoConvert(intsize):
 	hexsize = format(intsize, '08x')  # '00AABBCC'
@@ -296,32 +300,22 @@ class DownloadManager():
 # Handle bools
 def str2bool(v):
 	return str(v).lower() in ("yes", "true", "t", "1", "y")
-
-# Get 64 or 32 bit
-def is64Bit():
-	amd64 = platform.machine().endswith("64")
-	return amd64
-
-# Set 7z executable based on bit type
-def getSevenZip():
-	if is64Bit() == True:
-		return "7za64.exe"
-	else:
-		return "7za.exe"
 	
-# Get corecount, with fallback 
-def getCoreCount():
-	cores = str(os.cpu_count())  # thank you Python 3.4
-	if os.cpu_count() == None:
-		cores = str(1)
-	return cores
+# Get OS type
+def isWindows():
+	windows = platform.system() == "Windows"
+	return windows
 
 # Extract bars with 7z
 def extractBar(filepath):
 	for file in os.listdir(filepath):
 		if file.endswith(".bar"):
 			try:
-				subprocess.call(getSevenZip() + " x " + '"' + file + '" *.signed -aos', shell=True)
+				z = zipfile.ZipFile(file, 'r')
+				names = z.namelist()
+				for name in names:
+					if str(name).endswith(".signed"):
+						z.extract(name, filepath)
 			except Exception:
 				print("EXTRACTION FAILURE")
 				print("DID IT DOWNLOAD PROPERLY?")
@@ -341,8 +335,8 @@ def availability(url):
 			return False
 
 def doMagic(osversion, radioversion, softwareversion, device, localdir, autoloader):
-	version = "2015-04-13-A"  # update as needed
-	release = "https://github.com/thurask/lazyloader/releases/latest"
+	version = _version
+	release = _release
 	devicelist = ["STL100-1", "STL100-2/3/P9982", "STL100-4", "Q10/Q5/P9983", "Z30/CLASSIC/LEAP", "Z3", "PASSPORT"]
 	print("~~~LAZYLOADER VERSION", version + "~~~")
 	print("OS VERSION:", osversion)
@@ -628,14 +622,24 @@ def doMagic(osversion, radioversion, softwareversion, device, localdir, autoload
 
 if __name__ == '__main__':
 	if len(sys.argv) > 1:
-		parser = argparse.ArgumentParser(description="Create one autoloader for personal use.", usage="%(prog)s OSVERSION RADIOVERSION SWVERSION DEVICE", epilog = "http://github.com/thurask/lazyloader")
+		parser = argparse.ArgumentParser(description="Create one autoloader for personal use.", epilog = "http://github.com/thurask/lazyloader")
+		parser.add_argument("-v", "--version", action="version", version="%(prog)s " + _version)
 		parser.add_argument("os", help="OS version, 10.x.y.zzzz")
 		parser.add_argument("radio", help="Radio version, 10.x.y.zzzz")
 		parser.add_argument("swrelease", help="Software version, 10.x.y.zzzz")
-		parser.add_argument("device", type=deviceRange, help="0=STL100-1\n1=STL100-2/3/P9983\n2=STL100-4\n3=Q10/Q5/P9983\n4=Z30/CLASSIC/LEAP\n5=Z3\n6=PASSPORT")
+		devgroup = parser.add_argument_group("devices", "Device to load (one required)")
+		compgroup = devgroup.add_mutually_exclusive_group(required=True)
+		compgroup.add_argument("--stl100-1", dest="device", help="STL100-1", action="store_const", const=0)
+		compgroup.add_argument("--stl100-x", dest="device", help="STL100-2/3, P'9982", action="store_const", const=1)
+		compgroup.add_argument("--stl100-4", dest="device", help="STL100-4", action="store_const", const=2)
+		compgroup.add_argument("--q10", dest="device", help="Q10, Q5, P'9983", action="store_const", const=3)
+		compgroup.add_argument("--z30", dest="device", help="Z30, Classic, Leap", action="store_const", const=4)
+		compgroup.add_argument("--z3", dest="device", help="Z3", action="store_const", const=5)
+		compgroup.add_argument("--passport", dest="device", help="Passport", action="store_const", const=6)
 		parser.add_argument("--run-loader", dest="autoloader", help="Run autoloader after creation", action="store_true", default=False)
 		args = parser.parse_args(sys.argv[1:])
-		
+		if not isWindows():
+			args.autoloader = False
 		doMagic(args.os, args.radio, args.swrelease, args.device, os.getcwd(), args.autoloader)
 	else:
 		localdir = os.getcwd()
@@ -643,6 +647,9 @@ if __name__ == '__main__':
 		radioversion = input("RADIO VERSION: ")
 		softwareversion = input("SOFTWARE RELEASE: ")
 		device = int(input("SELECTED DEVICE (0=STL100-1; 1=STL100-2/3/P9983; 2=STL100-4; 3=Q10/Q5/P9983; \n4=Z30/CLASSIC/LEAP; 5=Z3; 6=PASSPORT): "))
-		autoloader = str2bool(input("RUN AUTOLOADER (WILL WIPE YOUR DEVICE!)(Y/N)?: "))
+		if isWindows():
+			autoloader = str2bool(input("RUN AUTOLOADER (WILL WIPE YOUR DEVICE!)(Y/N)?: "))
+		else:
+			autoloader = False
 		print(" ")
 		doMagic(osversion, radioversion, softwareversion, device, localdir, autoloader)
