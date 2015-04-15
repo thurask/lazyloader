@@ -2,45 +2,62 @@ lazyloader
 =========
 A Python 3 script to download bars, turn them into autoloaders and then load them.
 
+Loading autoloaders is Windows-only (obviously), but the rest can be performed on Mac/Linux.
+
 ## Requirements
 ### Operation
-Requires [7za.exe](http://www.7-zip.org/download.html) (32-bit and 64-bit) and [cap.exe](https://drive.bitcasa.com/send/Lrb0VC6NsOEX5BNSDmGVn2mkeiSDklghCXlYuQk_YkRE) in the same folder as the script. 32-bit 7za.exe should be included as 7za.exe and 64-bit 7za.exe should be included as 7za64.exe, since the script reads the OS bit setup and uses the 64/32 bit 7-Zip executable accordingly. Because 32-bit Windows is just as annoyingly persistent as Windows XP.
+Requires [cap.exe](https://drive.bitcasa.com/send/Lrb0VC6NsOEX5BNSDmGVn2mkeiSDklghCXlYuQk_YkRE) in the same folder as the script.
 
-If you're using just the .py file, make sure to have Python =>3.4.2 in your PATH and the support executables in the local folder. Or, if you're using the release .exe, extract everything into any one folder (all .exes, .pyds and .dlls).
+If you're using just the .py file, make sure to have Python =>3.4.2 in your PATH and cap in your working folder.
 
-### Redistribution
-Those listed in Operation, plus (preferably) conversion to executable formats via [cx_freeze](http://cx-freeze.readthedocs.org/en/latest/index.html).
+Or, if you're using the release .exe, extract everything into any one folder (all .exes, .pyds and .dlls).
 
 ## What It Does
-1. Ask for OS/radio/software versions, device type
-2. Download the right OS/radio bar based on above input
+1. Ask for OS/radio/software versions, device type (if not specified)
+2. Download the right OS/radio bar based on above input/specification
 3. Extract bars
 4. Create autoloader
-5. Ask to load autoloader
+5. Ask to load autoloader (Windows only)
 
 ## Command Line Arguments
 ### Help
 
 	> lazyloader -h
 	
-	usage: lazyloader.exe OSVERSION RADIOVERSION SWVERSION DEVICE
-	
+	usage: lazyloader.exe [-h] [-v]
+                      (--stl100-1 | --stl100-x | --stl100-4 | --q10 | --z30 | --z3 | --passport)
+                      [--run-loader]
+                      os radio swrelease
+
 	Create one autoloader for personal use.
 	
 	positional arguments:
-		os          OS version, 10.x.y.zzzz
-		radio       Radio version, 10.x.y.zzzz
-		swrelease   Software version, 10.x.y.zzzz
-		device      0=STL100-1 1=STL100-2/3/P9983 2=STL100-4 3=Q10/Q5/P9983
-	              4=Z30/CLASSIC/LEAP 5=Z3 6=PASSPORT
+	  os             OS version, 10.x.y.zzzz
+	  radio          Radio version, 10.x.y.zzzz
+	  swrelease      Software version, 10.x.y.zzzz
 	
 	optional arguments:
-		-h, --help  show this help message and exit
-		--run-loader  Run autoloader after creation
+	  -h, --help     show this help message and exit
+	  -v, --version  show program's version number and exit
+	  --run-loader   Run autoloader after creation
+	
+	devices:
+	  Device to load (one required)
+	
+	  --stl100-1     STL100-1
+	  --stl100-x     STL100-2/3, P'9982
+	  --stl100-4     STL100-4
+	  --q10          Q10, Q5, P'9983
+	  --z30          Z30, Classic, Leap
+	  --z3           Z3
+	  --passport     Passport
+	
+	http://github.com/thurask/lazyloader
+
 	
 ### Example
 
-		> lazyloader 10.3.1.2726 10.3.1.2727 10.3.1.1877 6
+		> lazyloader 10.3.1.2726 10.3.1.2727 10.3.1.1877 --passport
 	would make an autoloader for OS 10.3.1.2726/radio 10.3.1.2727 (software release 10.3.1.1877) for Passport (device 6).
 	
 ## License
