@@ -8,7 +8,13 @@ Loading autoloaders is Windows-only (obviously), but the rest can be performed o
 ### Operation
 Requires [cap.exe](https://drive.bitcasa.com/send/Lrb0VC6NsOEX5BNSDmGVn2mkeiSDklghCXlYuQk_YkRE) in the same folder as the script.
 
-If you're using just the .py file, make sure to have Python =>3.4.2 in your PATH and cap in your working folder.
+If you're using this as a .py file, it requires Python =>3.4.2. It also requires the [requests](http://docs.python-requests.org/en/latest/user/install/) library installed somehow.
+To install requests really easily, using pip:
+	
+	> pip install -r \path\to\requirements.txt
+	
+To use [pip-win](https://sites.google.com/site/pydatalog/python/pip-for-windows), just put that (corrected, of course) into pip-win's Command field and hit Run. It'll automatically download whichever pypi packages are dependencies of this one.
+If you downloaded the requirements.txt file in this repository, of course.
 
 Or, if you're using the release .exe, extract everything into any one folder (all .exes, .pyds and .dlls).
 
