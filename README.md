@@ -1,5 +1,10 @@
 lazyloader
 =========
+
+# HEY, READ THIS!
+
+**This has been superseded. Please go [here](https://github.com/thurask/bbarchivist)**.
+
 A Python 3 script to download bars, turn them into autoloaders and then load them.
 
 Loading autoloaders is Windows-only (obviously), but the rest can be performed on Mac/Linux.
